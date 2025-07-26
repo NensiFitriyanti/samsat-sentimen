@@ -3,8 +3,11 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
-import datetime
-import os
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import nltk
+from datetime import datetime
+
+nltk.download('vader_lexicon')
 
 # Dummy login
 USERNAME = "admin"
@@ -15,71 +18,65 @@ if "page" not in st.session_state:
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
+# Analisis Sentimen
+def analyze_sentiment(pelayanan_rating):
+    if pelayanan_rating == "Baik":
+        return "Positif"
+    elif pelayanan_rating == "Sedang":
+        return "Netral"
+    elif pelayanan_rating == "Buruk":
+        return "Negatif"
+    else:
+        return "Netral"
+
 # Halaman Utama
 def home():
-    st.set_page_config(page_title="Analisis Sentimen SAMSAT", layout="wide")
-    col1, col2 = st.columns([8, 2])
-    with col1:
-        st.title("📌 Analisis Sentimen Pelayanan SAMSAT")
-        st.write("Silakan pilih menu:")
-        if st.button("📝 Isi Komentar"):
-            st.session_state.page = "form"
-    with col2:
-        st.write("")
-        st.write("")
-        if st.button("🔐 Masuk Dashboard (Admin)"):
-            st.session_state.page = "login"
+    st.title("📌 Analisis Sentimen Pelayanan SAMSAT")
+    st.write("Silakan pilih menu:")
+    if st.button("📝 Isi Komentar"):
+        st.session_state.page = "form"
+    st.markdown(
+        "<div style='text-align: right;'>"
+        "<button onclick='window.location.reload();' style='float:right;'>🔐 Masuk Dashboard (Admin)</button>"
+        "</div>",
+        unsafe_allow_html=True
+    )
+    if st.session_state.logged_in:
+        st.session_state.page = "dashboard"
 
 # Form Komentar
 def form():
     st.title("🗣️ Form Komentar Publik")
-
     name = st.text_input("Nama")
-    tanggal = st.date_input("Tanggal Komentar", value=datetime.date.today())
-    
-    platform = st.selectbox("Mendapatkan informasi dari mana?", 
-                            ["YouTube", "Instagram", "Google Maps", "WhatsApp", "Scan di Tempat"])
-
+    date = st.date_input("Tanggal Komentar")
+    platform = st.selectbox("Mendapatkan informasi link dari mana?", ["YouTube", "Instagram", "Google Maps", "WhatsApp", "Scan di Tempat"])
     pelayanan = st.radio("Bagaimana pelayanannya?", ["Baik", "Sedang", "Buruk"])
-
+    
     comment = ""
     if pelayanan:
         comment = st.text_area("Berikan alasanmu")
 
-    if st.button("Kirim"):
-        if not name or not comment:
-            st.warning("Nama dan komentar tidak boleh kosong.")
-            return
-
-        # Mapping pelayanan ke sentimen
-        if pelayanan == "Baik":
-            sentiment = "Positif"
-        elif pelayanan == "Sedang":
-            sentiment = "Netral"
-        else:
-            sentiment = "Negatif"
-
+    if st.button("Kirim") and name and pelayanan and comment:
+        sentiment = analyze_sentiment(pelayanan)
         data = {
-            "Waktu": tanggal,
+            "Waktu": date.strftime("%Y-%m-%d"),
             "Nama": name,
             "Platform": platform,
             "Pelayanan": pelayanan,
             "Komentar": comment,
             "Sentimen": sentiment
         }
-
         df = pd.DataFrame([data])
         try:
-            df.to_csv("data_komentar.csv", mode="a", header=not os.path.exists("data_komentar.csv"), index=False)
-        except:
-            df.to_csv("data_komentar.csv", index=False)
-
+            df.to_csv("data_komentar.csv", mode="a", header=not pd.io.common.file_exists("data_komentar.csv"), index=False)
+        except Exception as e:
+            st.error(f"Gagal menyimpan komentar: {e}")
         st.session_state.page = "thanks"
 
-# Halaman Terima Kasih
+# Terima Kasih
 def thanks():
-    st.title("✅ Terima Kasih")
-    st.markdown("Komentar Anda telah dikirim. 😊")
+    st.title("✅ Terima Kasih 😊")
+    st.write("Komentar Anda telah dikirim.")
     if st.button("Kembali ke Beranda"):
         st.session_state.page = "home"
 
@@ -97,25 +94,32 @@ def login():
     if st.button("Kembali"):
         st.session_state.page = "home"
 
-# Dashboard Admin
+# Dashboard
 def dashboard():
-    st.title("📊 Dashboard Admin: Analisis Sentimen Layanan SAMSAT")
+    st.title("📊 Dashboard Sentimen Layanan")
     try:
         df = pd.read_csv("data_komentar.csv", parse_dates=["Waktu"])
-        st.write("### Tabel Komentar Masuk")
+        st.sidebar.title("Filter Data")
+        date_range = st.sidebar.date_input("Pilih Rentang Tanggal", [])
+        platform_filter = st.sidebar.multiselect("Pilih Platform", df["Platform"].unique(), default=list(df["Platform"].unique()))
+        
+        if len(date_range) == 2:
+            df = df[(df["Waktu"] >= pd.to_datetime(date_range[0])) & (df["Waktu"] <= pd.to_datetime(date_range[1]))]
+        df = df[df["Platform"].isin(platform_filter)]
+
+        st.write("### Tabel Komentar")
         st.dataframe(df)
 
-        # Grafik Sentimen
-        st.write("### Grafik Distribusi Sentimen")
-        sentimen_count = df["Sentimen"].value_counts()
-        st.bar_chart(sentimen_count)
+        st.download_button("📥 Download Data", df.to_csv(index=False).encode("utf-8"), "data_filtered.csv", "text/csv")
 
-        # Grafik Platform
-        st.write("### Jumlah Komentar per Platform")
-        platform_count = df["Platform"].value_counts()
-        st.bar_chart(platform_count)
+        st.write("### Distribusi Sentimen")
+        chart = df["Sentimen"].value_counts()
+        st.bar_chart(chart)
 
-        # Wordcloud
+        st.write("### Distribusi Platform")
+        platform_chart = df["Platform"].value_counts()
+        st.bar_chart(platform_chart)
+
         st.write("### Wordcloud Komentar")
         text = " ".join(df["Komentar"].astype(str))
         wordcloud = WordCloud(width=800, height=400, background_color="white").generate(text)
@@ -124,14 +128,16 @@ def dashboard():
         ax.axis("off")
         st.pyplot(fig)
 
-        # Insight
         st.write("### Insight:")
-        st.markdown("- **Komentar positif** menandakan pelayanan memuaskan.")
-        st.markdown("- **Komentar negatif** perlu ditindaklanjuti.")
-        st.markdown("- **Platform terbanyak** digunakan menunjukkan sumber pengakses layanan.")
-    except Exception as e:
-        st.warning(f"Belum ada data komentar atau terjadi kesalahan: {e}")
+        st.write("- Komentar positif menunjukkan pelayanan memuaskan.")
+        st.write("- Komentar negatif menandakan perlunya perbaikan.")
+        st.write("- Pantau platform dominan untuk strategi layanan.")
 
+    except FileNotFoundError:
+        st.warning("Belum ada data komentar.")
+    except Exception as e:
+        st.error(f"Terjadi kesalahan: {e}")
+    
     if st.button("Logout"):
         st.session_state.logged_in = False
         st.session_state.page = "home"
