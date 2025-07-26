@@ -101,10 +101,17 @@ def login():
 def dashboard():
     st.title("📊 Dashboard Admin / Editor")
     try:
-        df = pd.read_csv("data_komentar.csv", names=["Waktu", "Nama", "Platform", "Pelayanan", "Komentar", "Sentimen"])
+        df = pd.read_csv("data_komentar.csv", header=None)
+        expected_columns = ["Waktu", "Nama", "Platform", "Pelayanan", "Komentar", "Sentimen"]
+        if df.shape[1] != len(expected_columns):
+            st.error("Format file CSV tidak sesuai. Harap gunakan file dengan struktur yang benar.")
+            return
+        df.columns = expected_columns
 
         # Filter
-        df["Waktu"] = pd.to_datetime(df["Waktu"])
+        df["Waktu"] = pd.to_datetime(df["Waktu"], errors='coerce')
+        df = df.dropna(subset=["Waktu"])
+
         st.sidebar.markdown("### Filter Data")
         start_date = st.sidebar.date_input("Dari Tanggal", df["Waktu"].min().date())
         end_date = st.sidebar.date_input("Sampai Tanggal", df["Waktu"].max().date())
