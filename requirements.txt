@@ -10,3 +10,8 @@ wordcloud
 jinja2
 vaderSentiment
 pyngrok
+streamlit
+pandas
+matplotlib
+wordcloud
+nltk
