@@ -9,4 +9,4 @@ Fitur:
 
 Cara pakai:
 1. Klik "📝 Isi Komentar" untuk memberikan komentar
-2. Klik "🔐 Masuk Dashboard" (login: admin / 123) untuk melihat data
+2. Klik "🔐 Masuk Dashboard" (login: user / pwd) untuk melihat data
