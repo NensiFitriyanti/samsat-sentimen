@@ -1,0 +1,12 @@
+streamlit
+pandas
+nltk
+wordcloud
+matplotlib
+fastapi
+uvicorn
+matplotlib
+wordcloud
+jinja2
+vaderSentiment
+pyngrok
